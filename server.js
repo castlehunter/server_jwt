@@ -6,6 +6,37 @@ dotenv.config();
 const userService = require("./user-service.js");
 
 const HTTP_PORT = process.env.PORT || 8080;
+// JSON Web Token Setup
+let ExtractJwt = passportJWT.ExtractJwt;
+let JwtStrategy = passportJWT.Strategy;
+
+// Configure its options
+let jwtOptions = {};
+jwtOptions.jwtFromRequest = ExtractJwt.fromAuthHeaderWithScheme('jwt');
+
+jwtOptions.secretOrKey = process.env.JWT_SECRET;
+
+let strategy = new JwtStrategy(jwtOptions, function (jwt_payload, next) {
+    console.log('payload received', jwt_payload);
+  
+    if (jwt_payload) {
+      // The following will ensure that all routes using
+      // passport.authenticate have a req.user._id, req.user.userName, values
+      // that matches the request payload data
+      next(null, {
+        _id: jwt_payload._id,
+        userName: jwt_payload.userName,
+      });
+    } else {
+      next(null, false);
+    }
+  });
+
+  // tell passport to use our "strategy"
+passport.use(strategy);
+
+// add passport as application-level middleware
+app.use(passport.initialize());
 
 app.use(express.json());
 app.use(cors());
@@ -31,7 +62,7 @@ app.post("/api/user/login", (req, res) => {
             userName: user.userName
         };
 
-        let token=jwt.sign(payload, process.env.JWT_SECRET);
+        let token=jwt.sign(payload,jwtOptions.secretOrKey);
 
         res.json({ message: `user:${user.userName} login successful`,token:token});
     }).catch(msg => {
@@ -86,10 +117,7 @@ app.put("/api/user/history/:id", passport.authenticate('jwt',{session:false}), (
     })
 });
 
-app.delete("/api/user/history/:id", passport.authenticate('jwt',{session:false}), 
-
-
-(req, res) => {
+app.delete("/api/user/history/:id", passport.authenticate('jwt',{session:false}), (req, res) => {
     userService.removeHistory(req.user._id, req.params.id)
     .then(data => {
         res.json(data)
